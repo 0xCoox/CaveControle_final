@@ -43,11 +43,15 @@ export default class VRPNController {
         this.#callbacks = callbacks;
 	}
 
-	connect ( url = "ws://localhost:8000" ) {
-		this.#socket = new WebSocket( url );
-		this.#socket.addEventListener( "message", this.#handleMessage.bind(this) );
-	}
-
+    connect(url = "ws://localhost:8000") {
+        this.#socket = new WebSocket(url);
+        
+        this.#socket.addEventListener("error", (e) => {
+            console.warn("VRPN non disponible — trackers désactivés");
+        });
+        
+        this.#socket.addEventListener("message", this.#handleMessage.bind(this));
+    }
 	#handleMessage ( message ) {
 		const data = message.data;
         const dataArray = data.split( " " );

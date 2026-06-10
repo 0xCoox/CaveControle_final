@@ -7,8 +7,10 @@ export default class ClientNetwork {
         console.log(`ClientNetwork - constructor`);
     }
 
-connect(url = "ws://localhost", port = "3000") {
+    connect(url = "ws://localhost", port = "3000") {
         console.log(`ClientNetwork - connect ( ${url}:${port} )`);
+
+        // Navigateur natif WebSocket
         this.#socket = new WebSocket(`${url}:${port}`);
         this.#socket.onopen = () => { this.#handleOnOpen(); };
         this.#socket.onmessage = (event) => { this.#handleOnMessage(event.data); };
