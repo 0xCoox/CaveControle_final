@@ -40,11 +40,11 @@ export default class MultiScreenViewer {
                     UUID: "00000000-0000-0000-0000-000000000000"
                 }));
             },
-            onMessage: (messageBrut) => {
-                console.log("📥 [RÉSEAU CAVE] Message reçu :", messageBrut);
+onMessage: (messageBrut) => {
+                // console.log("📥 [RÉSEAU CAVE] Message reçu :", messageBrut); // Tu peux commenter ça pour éviter le spam dans la console
 
                 try {
-                    // 1. Détection rapide (qui marche très bien pour le flipEyes)
+                    // 1. Détection rapide
                     if (messageBrut.includes("flipEyes")) {
                         this.#worker.postMessage({ type: "flipEyes" });
                         return;
@@ -53,33 +53,37 @@ export default class MultiScreenViewer {
                     // 2. Décodage du message principal
                     const message = JSON.parse(messageBrut);
 
-                    // Si c'est le message de démarrage INSTANCE_LIST
                     if (message.payload && message.payload.command === "INSTANCE_LIST") {
                         console.log(`⚙️ Exécution de la commande : INSTANCE_LIST`);
                         return;
                     }
 
-                    // 🌟 LE DÉCODEUR : Si le payload est du texte (le double-JSON du serveur)
+                    // 🌟 LE DÉCODEUR : Si le payload est du texte
                     if (typeof message.payload === "string") {
-                        const contenuInterne = JSON.parse(message.payload); // On déballe la 2ème couche
+                        const contenuInterne = JSON.parse(message.payload); 
                         
                         if (contenuInterne.payload && contenuInterne.payload.command === "changeMesh") {
                             const fileName = contenuInterne.payload.data.fileName;
-                            console.log(`Changement de maillage détecté ! Chargement de : ${fileName}`);
-                            
-                            // On envoie enfin l'ordre au Worker 3D !
                             this.#worker.postMessage({ type: "loadMeshFile", fileName: fileName });
                         }
                         else if (contenuInterne.payload && contenuInterne.payload.command === "changePointSize") {
                             const newSize = contenuInterne.payload.data.size;
-                            console.log(`Nouvelle taille des points : ${newSize}`);
                             this.#worker.postMessage({ type: "changePointSize", size: newSize });
                         }
-                        // 🌟 LE NOUVEAU PONT POUR LE SCANNER (PLAN DE COUPE)
                         else if (contenuInterne.payload && contenuInterne.payload.command === "changeClippingHeight") {
                             const newHeight = contenuInterne.payload.data.height;
-                            console.log(`Nouvelle hauteur de coupe : ${newHeight}`);
                             this.#worker.postMessage({ type: "changeClippingHeight", height: newHeight });
+                        }
+                        // 🕹️ Joystick 2D (Face X/Y)
+                        else if (contenuInterne.payload && contenuInterne.payload.command === "moveTree") {
+                            const dirX = contenuInterne.payload.data.dirX;
+                            const dirY = contenuInterne.payload.data.dirY;
+                            this.#worker.postMessage({ type: "moveTree", dirX: dirX, dirY: dirY });
+                        }
+                        // 🚀 Joystick 1D (Profondeur Z)
+                        else if (contenuInterne.payload && contenuInterne.payload.command === "moveTreeDepth") {
+                            const dirZ = contenuInterne.payload.data.dirZ;
+                            this.#worker.postMessage({ type: "moveTreeDepth", dirZ: dirZ });
                         }
                     }
 

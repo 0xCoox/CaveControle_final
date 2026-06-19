@@ -6,11 +6,17 @@ import VRPNController from "./VRPNController.js";
 import Stats from './three/libs/stats.module.js';
 import { PLYLoader } from "./three/loaders/PLYLoader.js";
 
-console.log("worker");
+console.log("worker start");
 
 self.addEventListener("message", handleMessage );
 
 let point_cloud = null;
+
+// --- NOUVELLES VARIABLES POUR LE JOYSTICK ---
+let moveDirX = 0;
+let moveDirY = 0;
+let moveDirZ = 0;
+const MOVE_SPEED = 0.05; // Ajuste cette valeur si l'arbre bouge trop vite ou trop lentement
 
 const globalClipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 10);
 
@@ -51,6 +57,15 @@ function handleMessage ( message ) {
     if(message.data.type === "changeClippingHeight") {
         console.log("Hauteur de coupe mise à jour :", message.data.height);
         globalClipPlane.constant = message.data.height;
+    }
+
+    // --- RÉCEPTION DU JOYSTICK ---
+    if(message.data.type === "moveTree") {
+        moveDirX = message.data.dirX;
+        moveDirY = message.data.dirY; // C'est le Y maintenant !
+    }
+    if(message.data.type === "moveTreeDepth") {
+        moveDirZ = message.data.dirZ; // C'est le Z maintenant !
     }
 }
 
@@ -144,7 +159,7 @@ function loadPlyMesh(fileName) {
         point_cloud.material = new THREE.PointsMaterial({
             size: currentSize, 
             vertexColors: true,
-            clippingPlanes: [globalClipPlane], // On attache la lame ici
+            clippingPlanes: [globalClipPlane], 
             clipShadows: true
         });
         
@@ -262,6 +277,13 @@ function initRenderer ( canvas ) {
         cave.updateStereoScreenCameras(trackedCamera.matrixWorld.clone());
         caveHelper.updateStereoScreenCameraHelpers();
 
+        // --- NOUVEAU : DÉPLACEMENT SUR LE MONITEUR PC ---
+        if (point_cloud) {
+            point_cloud.position.x += moveDirX * MOVE_SPEED;
+            point_cloud.position.y += moveDirY * MOVE_SPEED;
+            point_cloud.position.z += moveDirZ * MOVE_SPEED;
+        }
+
         if(renderLeft) {
             camera.layers.enable(1);
             camera.layers.disable(2);
@@ -295,6 +317,16 @@ function initCaveRenderer ( canvas ) {
         caveHelper.visible = false;
         trackedCameraHelper.visible = false;
         scene.background = new THREE.Color(0X000000);
+
+        // --- NOUVEAU : DÉPLACEMENT SUR LE CAVE ---
+        if (point_cloud) {
+            // Le mouvement est déjà calculé dans initRenderer si la fenêtre PC est ouverte. 
+            // Pour éviter qu'il bouge 2 fois plus vite, on ne le remet pas ici.
+            // Si la fenêtre PC est fermée, le calcul se fera ici.
+            point_cloud.position.x += moveDirX * MOVE_SPEED;
+            point_cloud.position.y += moveDirY * MOVE_SPEED;
+            point_cloud.position.z += moveDirZ * MOVE_SPEED;
+        }
 
         for( let i = 0; i < 3; ++i ) {
             caveRenderer.setViewport(i * viewWidth, 0, viewWidth, viewHeight);
