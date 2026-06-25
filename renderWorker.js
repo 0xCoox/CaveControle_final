@@ -18,6 +18,9 @@ let moveDirY = 0;
 let moveDirZ = 0;
 const MOVE_SPEED = 0.05; // Ajuste cette valeur si l'arbre bouge trop vite ou trop lentement
 
+let isAutoRotating = false;
+const ROTATION_SPEED = 0.005; 
+
 const globalClipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 10);
 
 function handleMessage ( message ) {
@@ -44,8 +47,9 @@ function handleMessage ( message ) {
         console.log("Ordre de chargement reçu pour", newFile);
         loadPlyMesh(newFile);
     }
-    
-    // Récéption de la taille des points
+    if(message.data.type === "toggleAutoRotate") {
+        isAutoRotating = message.data.state;
+    }
     if(message.data.type === "changePointSize") {
         console.log("Taille des points mise à jour :", message.data.size);
         if (point_cloud && point_cloud.material) {
@@ -282,6 +286,9 @@ function initRenderer ( canvas ) {
             point_cloud.position.x += moveDirX * MOVE_SPEED;
             point_cloud.position.y += moveDirY * MOVE_SPEED;
             point_cloud.position.z += moveDirZ * MOVE_SPEED;
+        if (isAutoRotating) {
+                point_cloud.rotation.z += ROTATION_SPEED;
+            }
         }
 
         if(renderLeft) {

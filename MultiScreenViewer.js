@@ -58,7 +58,7 @@ onMessage: (messageBrut) => {
                         return;
                     }
 
-                    // 🌟 LE DÉCODEUR : Si le payload est du texte
+                    // LE DÉCODEUR : Si le payload est du texte
                     if (typeof message.payload === "string") {
                         const contenuInterne = JSON.parse(message.payload); 
                         
@@ -74,16 +74,21 @@ onMessage: (messageBrut) => {
                             const newHeight = contenuInterne.payload.data.height;
                             this.#worker.postMessage({ type: "changeClippingHeight", height: newHeight });
                         }
-                        // 🕹️ Joystick 2D (Face X/Y)
+                        // Joystick 2D (Face X/Y)
                         else if (contenuInterne.payload && contenuInterne.payload.command === "moveTree") {
                             const dirX = contenuInterne.payload.data.dirX;
                             const dirY = contenuInterne.payload.data.dirY;
                             this.#worker.postMessage({ type: "moveTree", dirX: dirX, dirY: dirY });
                         }
-                        // 🚀 Joystick 1D (Profondeur Z)
+                        // Joystick 1D (Profondeur Z)
                         else if (contenuInterne.payload && contenuInterne.payload.command === "moveTreeDepth") {
                             const dirZ = contenuInterne.payload.data.dirZ;
                             this.#worker.postMessage({ type: "moveTreeDepth", dirZ: dirZ });
+                        }
+                        //Rotation Automatique
+                        else if (contenuInterne.payload && contenuInterne.payload.command === "toggleAutoRotate") {
+                            const state = contenuInterne.payload.data.state;
+                            this.#worker.postMessage({ type: "toggleAutoRotate", state: state });
                         }
                     }
 
