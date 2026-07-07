@@ -1,5 +1,5 @@
-import * as THREE from "./three/three.module.js";
-import { OrbitControls } from "./three/controls/OrbitControls.js";
+import * as THREE from "../three/three.module.js";
+import { OrbitControls } from "./controls/OrbitControls.js";
 import { PLYLoader } from "./three/loaders/PLYLoader.js";
 import ScreenWindow from "./Cave/ScreenWindow.js";
 import ClientNetwork from "./ClientNetwork.js"; // 1. L'import est parfait ici tout en haut
@@ -89,6 +89,18 @@ onMessage: (messageBrut) => {
                         else if (contenuInterne.payload && contenuInterne.payload.command === "toggleAutoRotate") {
                             const state = contenuInterne.payload.data.state;
                             this.#worker.postMessage({ type: "toggleAutoRotate", state: state });
+                        }
+                        else if (contenuInterne.payload && contenuInterne.payload.command === "scaleTree") {
+                            const scaleFactor = contenuInterne.payload.data.scaleFactor;
+                            this.#worker.postMessage({ type: "scaleTree", scaleFactor: scaleFactor });
+                        }
+                        else if (contenuInterne.payload && contenuInterne.payload.command === "rotateTree") {
+                            // La tablette envoie désormais un quaternion incrémental
+                            // (logique trackball, cf. TrackballControls) plutôt que
+                            // deltaX/deltaY. On relaie tel quel au worker, qui applique
+                            // la même transformation que la preview côté tablette.
+                            const { x, y, z, w } = contenuInterne.payload.data;
+                            this.#worker.postMessage({ type: "rotateTree", x, y, z, w });
                         }
                     }
 

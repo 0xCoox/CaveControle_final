@@ -8,22 +8,23 @@ import { PLYLoader } from "./three/loaders/PLYLoader.js";
 
 console.log("worker start");
 
-self.addEventListener("message", handleMessage );
+self.addEventListener("message", handleMessage);
 
 let point_cloud = null;
+let baseScale = 1.0; // Sauvegarde de l'échelle initiale pour le multiplicateur de pinch
 
-// --- NOUVELLES VARIABLES POUR LE JOYSTICK ---
+// --- VARIABLES POUR LE JOYSTICK ---
 let moveDirX = 0;
 let moveDirY = 0;
 let moveDirZ = 0;
-const MOVE_SPEED = 0.05; // Ajuste cette valeur si l'arbre bouge trop vite ou trop lentement
+const MOVE_SPEED = 0.05; 
 
 let isAutoRotating = false;
 const ROTATION_SPEED = 0.005; 
 
 const globalClipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 10);
 
-function handleMessage ( message ) {
+function handleMessage(message) {
     if(message.data.type === "monitorCanvas") {
         initRenderer(message.data.canvas);
     }
@@ -57,19 +58,44 @@ function handleMessage ( message ) {
             point_cloud.material.needsUpdate = true;
         }
     }
+    // --- NOUVEAU : RÉCEPTION DU SCALE GLOBAL (PINCH) ---
+    if(message.data.type === "scaleTree") {
+        console.log("Mise à l'échelle de l'arbre :", message.data.scaleFactor);
+        if (point_cloud) {
+            point_cloud.scale.setScalar(baseScale * message.data.scaleFactor);
+        }
+    }
 
     if(message.data.type === "changeClippingHeight") {
         console.log("Hauteur de coupe mise à jour :", message.data.height);
         globalClipPlane.constant = message.data.height;
     }
 
+    if (message.data.type === "rotateTree") {
+        // Reçoit le quaternion incrémental calculé côté tablette par la logique
+        // trackball (cf. TrackballControls : eye/up mis à jour à chaque drag).
+        // On applique exactement la même transformation que dans la preview de
+        // la télécommande : rotation inverse du quaternion reçu, composée à
+        // gauche (repère monde), pour que le CAVE reproduise le même mouvement
+        // que ce que voit l'utilisateur sur sa tablette.
+        if (point_cloud) {
+            const incrementalQuat = new THREE.Quaternion(
+                message.data.x,
+                message.data.y,
+                message.data.z,
+                message.data.w
+            );
+            point_cloud.quaternion.premultiply(incrementalQuat.invert());
+        }
+    }
+
     // --- RÉCEPTION DU JOYSTICK ---
     if(message.data.type === "moveTree") {
         moveDirX = message.data.dirX;
-        moveDirY = message.data.dirY; // C'est le Y maintenant !
+        moveDirY = message.data.dirY; 
     }
     if(message.data.type === "moveTreeDepth") {
-        moveDirZ = message.data.dirZ; // C'est le Z maintenant !
+        moveDirZ = message.data.dirZ; 
     }
 }
 
@@ -146,7 +172,6 @@ function loadPlyMesh(fileName) {
         point_cloud.geometry.dispose();
         point_cloud.material.dispose();
     }
-
     const dynamicLoader = new PLYLoader();
     dynamicLoader.load("./" + fileName, function (points) {
         point_cloud = new THREE.Points(points);
@@ -155,9 +180,10 @@ function loadPlyMesh(fileName) {
         var bbox = new THREE.Box3().setFromObject(point_cloud);
         var size = bbox.getSize(new THREE.Vector3());
         var maxAxis = Math.max(size.x, size.y, size.z);
-        point_cloud.scale.multiplyScalar(4.0 / maxAxis);
-        point_cloud.position.set(0, 1.5, 1);
         
+        baseScale = 4.0 / maxAxis;
+        point_cloud.scale.setScalar(baseScale);
+        point_cloud.position.set(0, 1.5, 1);
         let currentSize = 0.002;
         
         point_cloud.material = new THREE.PointsMaterial({
@@ -173,6 +199,7 @@ function loadPlyMesh(fileName) {
         console.error("Erreur de chargement du fichier .ply :", error);
     });
 }
+
 
 loadPlyMesh("test_point_cloud.ply");
 
@@ -267,13 +294,30 @@ const vrpnController = new VRPNController({
 
 let renderer = undefined;
 let renderLeft = true;
+let lastUpdateTime = 0;
+
+// --- NOUVEAU : Fonction centralisée pour la physique et les animations ---
+// Cela empêche l'arbre de bouger 2x plus vite si les deux renderers sont actifs.
+function updateScene(time) {
+    if (time === lastUpdateTime) return;
+    lastUpdateTime = time;
+
+    if (point_cloud) {
+        point_cloud.position.x += moveDirX * MOVE_SPEED;
+        point_cloud.position.y += moveDirY * MOVE_SPEED;
+        point_cloud.position.z += moveDirZ * MOVE_SPEED;
+
+        if (isAutoRotating) {
+            point_cloud.rotation.z += ROTATION_SPEED;
+        }
+    }
+}
 
 function initRenderer ( canvas ) {
     renderer = new THREE.WebGLRenderer({ canvas: canvas });
-    
     renderer.localClippingEnabled = true;
 
-    renderer.setAnimationLoop( () => {
+    renderer.setAnimationLoop( (time) => {
         trackedCamera.updateProjectionMatrix();
         trackedCamera.updateWorldMatrix();
         trackedCameraHelper.update();
@@ -281,15 +325,7 @@ function initRenderer ( canvas ) {
         cave.updateStereoScreenCameras(trackedCamera.matrixWorld.clone());
         caveHelper.updateStereoScreenCameraHelpers();
 
-        // --- NOUVEAU : DÉPLACEMENT SUR LE MONITEUR PC ---
-        if (point_cloud) {
-            point_cloud.position.x += moveDirX * MOVE_SPEED;
-            point_cloud.position.y += moveDirY * MOVE_SPEED;
-            point_cloud.position.z += moveDirZ * MOVE_SPEED;
-        if (isAutoRotating) {
-                point_cloud.rotation.z += ROTATION_SPEED;
-            }
-        }
+        updateScene(time);
 
         if(renderLeft) {
             camera.layers.enable(1);
@@ -312,11 +348,9 @@ function initCaveRenderer ( canvas ) {
     caveCanvas = canvas;
     caveRenderer = new THREE.WebGLRenderer({ canvas: canvas });
     caveRenderer.setScissorTest(true);
-    
     caveRenderer.localClippingEnabled = true;
     
-    caveRenderer.setAnimationLoop( () => {
-
+    caveRenderer.setAnimationLoop( (time) => {
         const side = renderLeft ? "left" : "right";
         const viewWidth = canvas.width / 3;
         const viewHeight = canvas.height;
@@ -325,15 +359,7 @@ function initCaveRenderer ( canvas ) {
         trackedCameraHelper.visible = false;
         scene.background = new THREE.Color(0X000000);
 
-        // --- NOUVEAU : DÉPLACEMENT SUR LE CAVE ---
-        if (point_cloud) {
-            // Le mouvement est déjà calculé dans initRenderer si la fenêtre PC est ouverte. 
-            // Pour éviter qu'il bouge 2 fois plus vite, on ne le remet pas ici.
-            // Si la fenêtre PC est fermée, le calcul se fera ici.
-            point_cloud.position.x += moveDirX * MOVE_SPEED;
-            point_cloud.position.y += moveDirY * MOVE_SPEED;
-            point_cloud.position.z += moveDirZ * MOVE_SPEED;
-        }
+        updateScene(time);
 
         for( let i = 0; i < 3; ++i ) {
             caveRenderer.setViewport(i * viewWidth, 0, viewWidth, viewHeight);
@@ -343,7 +369,6 @@ function initCaveRenderer ( canvas ) {
 
         caveHelper.visible = true;
         trackedCameraHelper.visible = true;
-
     });
 }
 
