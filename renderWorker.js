@@ -72,24 +72,19 @@ function handleMessage(message) {
     }
 
     if (message.data.type === "rotateTree") {
-        // Reçoit le quaternion incrémental calculé côté tablette par la logique
-        // trackball (cf. TrackballControls : eye/up mis à jour à chaque drag).
-        // On applique exactement la même transformation que dans la preview de
-        // la télécommande : rotation inverse du quaternion reçu, composée à
-        // gauche (repère monde), pour que le CAVE reproduise le même mouvement
-        // que ce que voit l'utilisateur sur sa tablette.
+        // Reçoit le quaternion incrémental calculé côté tablette par la trackball (cf. TrackballControls : eye/up mis à jour à chaque drag).
         if (point_cloud) {
             const incrementalQuat = new THREE.Quaternion(
                 message.data.x,
-                message.data.y,
                 message.data.z,
+                message.data.y,
                 message.data.w
             );
             point_cloud.quaternion.premultiply(incrementalQuat.invert());
         }
     }
 
-    // --- RÉCEPTION DU JOYSTICK ---
+    // RÉCEPTION DU JOYSTICK 
     if(message.data.type === "moveTree") {
         moveDirX = message.data.dirX;
         moveDirY = message.data.dirY; 
